@@ -1,0 +1,40 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# Sensitive files - DO NOT COMMIT!
+# Note: terraform.tfvars.example is safe to commit (template only)
+terraform.tfvars
+*.auto.tfvars
+
+# SSH Keys
+bastion-key
+bastion-key.pub
+*.pem
+
+# Backup files
+*.backup
+*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Terraform 0.14+ lock file
+.terraform.lock.hcl

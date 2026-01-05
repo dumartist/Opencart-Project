@@ -1,0 +1,45 @@
+#############################################
+# Terraform Variables - EXAMPLE FILE
+#############################################
+# Copy this file to terraform.tfvars and fill in your values
+# Command: cp terraform.tfvars.example terraform.tfvars
+#
+# ⚠️  terraform.tfvars contains sensitive data - DO NOT commit it!
+#############################################
+
+#############################################
+# Database Credentials
+#############################################
+
+db_name     = "opencartdb"
+db_username = "your_db_username"
+db_password = "YourSecurePassword123!"  # Min 12 chars, no @ symbol
+
+#############################################
+# OpenCart Admin Credentials
+#############################################
+
+opencart_admin_username = "your_admin_username"
+opencart_admin_password = "YourAdminPass123!"  # Min 10 chars
+opencart_admin_email    = "admin@example.com"
+
+#############################################
+# Domain Configuration
+#############################################
+
+# Leave empty to use ALB DNS name directly
+cloudflare_domain = "shop.yourdomain.com"
+
+#############################################
+# Monitoring Configuration
+#############################################
+
+alert_email = "your-email@example.com"
+
+#############################################
+# SSH Key Configuration
+#############################################
+
+# Paste your SSH public key here (contents of your .pub file)
+# Generate with: ssh-keygen -t rsa -b 4096 -f bastion-key
+bastion_public_key = "ssh-rsa AAAA...your-public-key-here..."
