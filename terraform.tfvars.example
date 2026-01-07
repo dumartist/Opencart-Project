@@ -8,6 +8,16 @@
 #############################################
 
 #############################################
+# AWS Learner Lab Credentials
+#############################################
+# Copy these from AWS Learner Lab > AWS Details > AWS CLI
+# These expire every ~4 hours when the lab session ends
+
+aws_access_key    = "ASIAXXXXXXXXXXX"
+aws_secret_key    = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+aws_session_token = "IQoJb3JpZ2luX2VjExxxxxxxx...very-long-token..."
+
+#############################################
 # Database Credentials
 #############################################
 

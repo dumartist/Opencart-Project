@@ -6,13 +6,31 @@
 #############################################
 
 #############################################
-# AWS Region
+# AWS Credentials (for Learner Lab)
 #############################################
 
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"
+}
+
+variable "aws_access_key" {
+  description = "AWS Access Key ID (from Learner Lab credentials)"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS Secret Access Key (from Learner Lab credentials)"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_session_token" {
+  description = "AWS Session Token (from Learner Lab credentials)"
+  type        = string
+  sensitive   = true
 }
 
 #############################################
