@@ -18,6 +18,7 @@
 8. [Region Restrictions](#8-region-restrictions)
 9. [Sensitive Variables Security](#9-sensitive-variables-security)
 10. [Cloudflare Free Tier Limitations](#10-cloudflare-free-tier-limitations)
+11. [Cloudflare Caching Issue After Redeployment](#11-cloudflare-caching-issue-after-redeployment)
 
 ---
 
@@ -595,6 +596,61 @@ Used free Bot Fight Mode + Browser Integrity Check instead of paid WAF rules.
 
 ---
 
+## 11. Cloudflare Caching Issue After Redeployment
+
+### ❌ Problem
+After redeploying infrastructure with the same Cloudflare domain, CSS/JS files don't load. Browser console shows 404 errors for all assets:
+```
+Failed to load resource: the server responded with a status of 404 ()
+  jquery-3.7.1.min.js
+  bootstrap.min.css
+  stylesheet.css
+  ... all images also 404
+```
+
+**Confusing behavior:**
+- Files exist on the server (verified via `ls -la`)
+- `curl http://localhost/catalog/...` returns 200 OK
+- Admin panel CSS works, but storefront CSS doesn't
+- Same issue on both HTTP and HTTPS
+
+### 🔍 Root Cause
+**Cloudflare cached the 404 responses** from the previous (broken/uninstalled) deployment!
+
+When Cloudflare Page Rules are configured to "Cache Everything" for `/catalog/view/*`, it caches not just successful responses but also 404 errors. After redeployment:
+
+| Request | Actual Server Response | Cloudflare Returns |
+|---------|------------------------|-------------------|
+| `/catalog/view/javascript/jquery.js` | 200 OK | ❌ **Cached 404** |
+| `/catalog/view/stylesheet/stylesheet.css` | 200 OK | ❌ **Cached 404** |
+
+### ✅ Solution
+**Purge Cloudflare cache + Hard refresh browser:**
+
+1. **Cloudflare Dashboard** → Select your domain
+2. Go to **Caching → Configuration**
+3. Click **"Purge Everything"**
+4. Wait ~30 seconds for cache invalidation
+5. In browser: **Ctrl+Shift+R** (Hard Refresh) or **Ctrl+F5**
+
+### 💡 Prevention Tips
+
+| Approach | How |
+|----------|-----|
+| **Purge after every `terraform apply`** | Make it part of your deployment workflow |
+| **Use Development Mode temporarily** | Cloudflare → Caching → Development Mode (bypasses cache) |
+| **Reduce cache TTL for assets** | Lower Edge TTL in Page Rules during development |
+| **Add cache busting** | OpenCart can append `?v=timestamp` to assets |
+
+### ⚠️ When This Happens
+This issue occurs when:
+- You run `terraform destroy` and then `terraform apply` again
+- You're using the same Cloudflare domain across deployments
+- The new deployment takes time to fully initialize (OpenCart not yet installed)
+- Cloudflare Page Rules cache the 404s during the initialization window
+
+---
+
 ## Summary: Key Restrictions & Solutions
 
 | Challenge | Restriction | Solution |
@@ -607,6 +663,7 @@ Used free Bot Fight Mode + Browser Integrity Check instead of paid WAF rules.
 | Instance limits | Max 9, 32 vCPU | Plan ASG carefully |
 | Regions | us-east-1/us-west-2 only | Deploy in us-east-1 |
 | WAF | Paid feature | Free Bot Fight Mode |
+| **Cloudflare cache after redeploy** | **Stale 404s cached** | **Purge All + Hard Refresh** |
 
 ---
 
@@ -622,4 +679,4 @@ Used free Bot Fight Mode + Browser Integrity Check instead of paid WAF rules.
 
 ---
 
-*Last Updated: January 5, 2026*
+*Last Updated: January 8, 2026*
