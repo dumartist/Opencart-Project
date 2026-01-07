@@ -319,6 +319,12 @@ resource "aws_security_group" "rds" {
 resource "tls_private_key" "bastion" {
   algorithm = "RSA"
   rsa_bits  = 4096
+
+  # Force key rotation by changing this value
+  # Uncomment and change the value to force a new key generation
+  # lifecycle {
+  #   ignore_changes = []
+  # }
 }
 
 resource "aws_key_pair" "bastion" {
@@ -1507,6 +1513,27 @@ resource "aws_cloudtrail" "main" {
 }
 
 #############################################
+# AUTO-EXPORT BASTION SSH KEY
+#############################################
+
+# Automatically save the bastion private key AND public key after apply
+# IMPORTANT: Both files must be saved together to prevent SSH authentication failures
+# caused by OpenSSH reading a stale .pub file from a previous deployment
+# NOTE: Uses local_file resources instead of inline key interpolation to avoid
+# exposing key patterns in the Terraform source code
+resource "local_sensitive_file" "bastion_private_key" {
+  content         = tls_private_key.bastion.private_key_pem
+  filename        = "${path.module}/bastion-key"
+  file_permission = "0400"
+}
+
+resource "local_file" "bastion_public_key" {
+  content         = tls_private_key.bastion.public_key_openssh
+  filename        = "${path.module}/bastion-key.pub"
+  file_permission = "0644"
+}
+
+#############################################
 # OUTPUTS
 #############################################
 
@@ -1531,19 +1558,29 @@ output "alb_dns_name" {
 }
 
 output "bastion_ssh_command" {
-  description = "SSH command for bastion (save private key first)"
+  description = "SSH command for bastion (key is auto-saved after apply)"
   value       = "ssh -i bastion-key ubuntu@${aws_instance.bastion.public_ip}"
 }
 
+output "bastion_public_ip" {
+  description = "Bastion host public IP address"
+  value       = aws_instance.bastion.public_ip
+}
+
 output "bastion_private_key" {
-  description = "Private key for SSH access (save to bastion-key file)"
+  description = "Private key for SSH access (auto-saved to bastion-key file)"
   value       = tls_private_key.bastion.private_key_pem
   sensitive   = true
 }
 
-output "save_private_key_command" {
-  description = "Run this PowerShell command to save the private key"
-  value       = "terraform output -raw bastion_private_key > bastion-key"
+output "bastion_key_fingerprint" {
+  description = "SSH key fingerprint - verify this matches your bastion-key file"
+  value       = tls_private_key.bastion.public_key_fingerprint_sha256
+}
+
+output "manual_key_export_command" {
+  description = "Manual key export (only if auto-export failed)"
+  value       = "$s = Get-Content terraform.tfstate -Raw | ConvertFrom-Json; $s.outputs.bastion_private_key.value | Set-Content bastion-key -NoNewline; icacls bastion-key /inheritance:r /grant \"$($env:USERNAME):R\""
 }
 
 output "rds_endpoint" {

@@ -78,12 +78,11 @@ terraform init
 # Preview changes
 terraform plan
 
-# Deploy infrastructure
+# Deploy infrastructure (SSH key is auto-exported!)
 terraform apply
-
-# Save SSH private key (after apply)
-terraform output -raw bastion_private_key > bastion-key
 ```
+
+> ✅ **Auto SSH Key Export:** The `bastion-key` file is automatically created with correct permissions after `terraform apply`. No manual key export needed!
 
 ### 4. Access Your Store
 
@@ -94,8 +93,9 @@ After deployment (~15-35 minutes for full setup):
 terraform output opencart_url
 terraform output opencart_admin_url
 
-# SSH to bastion
+# SSH to bastion (key is already saved!)
 terraform output bastion_ssh_command
+# Example: ssh -i bastion-key ubuntu@3.231.168.48
 ```
 
 ---
@@ -185,10 +185,17 @@ CloudWatch alarms notify via email:
 # View all outputs
 terraform output
 
-# SSH to bastion
+# Get SSH command (includes current bastion IP)
+terraform output bastion_ssh_command
+
+# SSH to bastion (key is auto-saved after apply)
 ssh -i bastion-key ubuntu@<bastion-ip>
 
-# From bastion, SSH to web server
+# Verify your key matches Terraform (fingerprints must match!)
+terraform output bastion_key_fingerprint
+ssh-keygen -lf bastion-key
+
+# From bastion, SSH to web server (key is pre-installed on bastion)
 ssh ubuntu@<private-ip>
 
 # View OpenCart files (from web server)
@@ -236,10 +243,28 @@ terraform destroy
 ## 📝 Troubleshooting
 
 ### SSH Permission Denied
+
+**Most common cause:** Using an old `bastion-key` file from a previous deployment.
+
+```powershell
+# Step 1: Verify key fingerprint matches Terraform
+terraform output bastion_key_fingerprint
+ssh-keygen -lf bastion-key
+# These MUST match! If not, re-export the key:
+
+# Step 2: Re-export key manually (if auto-export failed)
+$s = Get-Content terraform.tfstate -Raw | ConvertFrom-Json
+$s.outputs.bastion_private_key.value | Set-Content bastion-key -NoNewline
+icacls bastion-key /inheritance:r /grant "$($env:USERNAME):R"
+
+# Step 3: Verify correct IP address
+terraform output bastion_ssh_command
+```
+
+**Linux/Mac users:**
 ```bash
-# Save the private key first
 terraform output -raw bastion_private_key > bastion-key
-chmod 600 bastion-key  # Linux/Mac only
+chmod 600 bastion-key
 ```
 
 ### Instances Not Healthy
