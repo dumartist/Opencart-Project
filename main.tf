@@ -201,21 +201,32 @@ resource "aws_security_group" "bastion" {
 
 resource "aws_security_group" "alb" {
   name        = "${local.project_name}-alb-sg"
-  description = "Allow HTTP/S to ALB"
+  description = "Allow HTTPS from Cloudflare only"
   vpc_id      = aws_vpc.main.id
 
+  # Cloudflare IPv4 ranges (https://cloudflare.com/ips-v4)
+  # Only allow HTTPS from Cloudflare - blocks direct ALB access
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port = 443
+    to_port   = 443
+    protocol  = "tcp"
+    cidr_blocks = [
+      "173.245.48.0/20", 
+      "103.21.244.0/22", 
+      "103.22.200.0/22", 
+      "103.31.4.0/22", 
+      "141.101.64.0/18", 
+      "108.162.192.0/18", 
+      "190.93.240.0/20", 
+      "188.114.96.0/20", 
+      "197.234.240.0/22", 
+      "198.41.128.0/17", 
+      "162.158.0.0/15", 
+      "104.16.0.0/13", 
+      "104.24.0.0/14", 
+      "172.64.0.0/13", 
+      "131.0.72.0/22"
+    ]
   }
 
   egress {
@@ -348,11 +359,11 @@ resource "aws_efs_file_system" "opencart" {
 
   # Cost optimization: Move infrequently accessed files to cheaper storage
   lifecycle_policy {
-    transition_to_ia = "AFTER_30_DAYS"  # Move to Infrequent Access after 30 days
+    transition_to_ia = "AFTER_30_DAYS" # Move to Infrequent Access after 30 days
   }
 
   lifecycle_policy {
-    transition_to_primary_storage_class = "AFTER_1_ACCESS"  # Move back when accessed
+    transition_to_primary_storage_class = "AFTER_1_ACCESS" # Move back when accessed
   }
 
   tags = merge(local.common_tags, {
@@ -387,7 +398,7 @@ resource "aws_backup_plan" "efs" {
   rule {
     rule_name         = "daily-efs-backup"
     target_vault_name = aws_backup_vault.opencart.name
-    schedule          = "cron(0 5 * * ? *)"  # Daily at 5 AM UTC (after RDS backup)
+    schedule          = "cron(0 5 * * ? *)" # Daily at 5 AM UTC (after RDS backup)
 
     # Backup lifecycle - delete after 30 days (no cold storage for short retention)
     lifecycle {
@@ -399,10 +410,10 @@ resource "aws_backup_plan" "efs" {
   rule {
     rule_name         = "weekly-efs-backup"
     target_vault_name = aws_backup_vault.opencart.name
-    schedule          = "cron(0 6 ? * SUN *)"  # Every Sunday at 6 AM UTC
+    schedule          = "cron(0 6 ? * SUN *)" # Every Sunday at 6 AM UTC
 
     lifecycle {
-      delete_after = 90  # Keep weekly backups for 90 days
+      delete_after = 90 # Keep weekly backups for 90 days
     }
   }
 
@@ -454,11 +465,11 @@ resource "aws_db_instance" "opencart" {
   multi_az               = true
 
   # DISASTER RECOVERY: Automated backups
-  backup_retention_period = 7                    # Keep 7 days of automated backups
-  backup_window           = "03:00-04:00"        # Daily backup at 3 AM UTC
+  backup_retention_period = 7                     # Keep 7 days of automated backups
+  backup_window           = "03:00-04:00"         # Daily backup at 3 AM UTC
   maintenance_window      = "Mon:04:00-Mon:05:00" # Maintenance window after backup
   copy_tags_to_snapshot   = true
-  deletion_protection     = false                 # Set to true in real production
+  deletion_protection     = false # Set to true in real production
 
   # Final snapshot before deletion (for safety)
   skip_final_snapshot       = false
@@ -559,9 +570,14 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
+  # Redirect all HTTP to HTTPS
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -588,7 +604,7 @@ resource "tls_self_signed_cert" "alb_cert" {
     organization = "Masquerade OpenCart"
   }
 
-  validity_period_hours = 8760  # 1 year
+  validity_period_hours = 8760 # 1 year
 
   allowed_uses = [
     "key_encipherment",
@@ -643,7 +659,7 @@ resource "aws_lb_listener" "https" {
 locals {
   # Cloudflare domain or fallback to ALB DNS
   site_domain = var.cloudflare_domain != "" ? var.cloudflare_domain : aws_lb.main.dns_name
-  
+
   user_data_opencart = <<-EOT
 #!/bin/bash
 exec > >(tee /var/log/user-data.log) 2>&1
@@ -861,8 +877,11 @@ cat > /etc/apache2/sites-available/opencart.conf << 'EOF'
 <VirtualHost *:80>
     DocumentRoot /var/www/html/opencart
     
-    # Trust Cloudflare headers for HTTPS detection
+    # Trust Cloudflare/ALB headers for HTTPS detection
     SetEnvIf X-Forwarded-Proto "https" HTTPS=on
+    
+    # Also set this as a request header for PHP to read
+    RequestHeader set X-Forwarded-Proto "https" env=HTTPS
     
     <Directory /var/www/html/opencart>
         Options -Indexes +FollowSymLinks
@@ -874,6 +893,7 @@ cat > /etc/apache2/sites-available/opencart.conf << 'EOF'
     CustomLog $${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
 EOF
+a2enmod headers  # Make sure headers module is enabled
 a2dissite 000-default.conf 2>/dev/null; a2ensite opencart.conf; systemctl restart apache2
 log "Done! URL: https://$SITE_DOMAIN/"
   EOT
@@ -1413,7 +1433,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "cleanup-old-versions"
     status = "Enabled"
 
-    filter {}  # Apply to all objects
+    filter {} # Apply to all objects
 
     # Delete non-current versions after 90 days
     noncurrent_version_expiration {
@@ -1430,7 +1450,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
-    filter {}  # Apply to all objects
+    filter {} # Apply to all objects
 
     # Move logs older than 30 days to Glacier for cost savings
     transition {

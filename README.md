@@ -156,6 +156,8 @@ UAS-5TIMA/
 - ✅ RDS encryption at rest
 - ✅ EFS encryption at rest
 - ✅ HTTPS via Cloudflare (Full SSL mode)
+- ✅ **ALB restricted to Cloudflare IPs only** (blocks direct ALB access)
+- ✅ **HTTP→HTTPS redirect** on ALB
 - ✅ Bastion host for SSH access
 - ✅ No public IPs on web servers
 - ✅ Sensitive variables in terraform.tfvars
@@ -293,4 +295,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-*Last Updated: January 5, 2026*
+*Last Updated: January 8, 2026*

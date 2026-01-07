@@ -185,16 +185,19 @@ locals {
 | Security Group | Inbound Rules | Purpose |
 |----------------|---------------|---------|
 | `bastion-sg` | 22 from 0.0.0.0/0 | SSH access to bastion |
-| `alb-sg` | 80, 443 from 0.0.0.0/0 | ALB accepts HTTP/HTTPS |
+| `alb-sg` | 443 from Cloudflare IPs only | **Blocks direct ALB access** |
 | `web-sg` | 80 from ALB, 22 from Bastion | Web server access |
 | `efs-sg` | 2049 from Web | NFS mount from web servers |
 | `rds-sg` | 3306 from Web + Bastion | MySQL access |
 
+> [!IMPORTANT]
+> **ALB Security Hardening**: The ALB security group only allows HTTPS (port 443) from [Cloudflare IP ranges](https://cloudflare.com/ips-v4). This prevents attackers from bypassing Cloudflare's DDoS protection by accessing the ALB directly. The HTTP listener redirects to HTTPS (301 redirect).
+
 **Security Chain**:
 ```
-Internet → Cloudflare CDN → ALB (alb-sg) → Web Servers (web-sg) → EFS/RDS
-                                                    ↑
-                                            Bastion (bastion-sg)
+Internet → Cloudflare CDN (HTTPS) → ALB (Cloudflare IPs only) → Web Servers → EFS/RDS
+                                                                      ↑
+                                                              Bastion (SSH)
 ```
 
 ---
